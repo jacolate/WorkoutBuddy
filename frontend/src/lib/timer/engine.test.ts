@@ -11,6 +11,7 @@ function step(i: number, kind: Step['kind'], advance: Step['advance'], durationS
 		exerciseId: kind === 'work' ? 1 : null,
 		exerciseName: kind === 'work' ? 'Swing' : '',
 		targetReps: advance === 'manual' ? 10 : null,
+		targetDistanceM: null,
 		weight: 16,
 		blockIndex: 0,
 		blockLabel: 'Test',

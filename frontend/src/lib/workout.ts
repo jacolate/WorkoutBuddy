@@ -44,7 +44,7 @@ export function newItem(e: Exercise, block: Block): BlockItem {
 
 function itemText(it: BlockItem, ex: Map<number, Exercise>, withAmount = true): string {
 	const name = ex.get(it.exerciseId)?.name ?? '?';
-	const amount = it.reps ? `${it.reps}×` : it.durationSec ? `${it.durationSec}s` : '';
+	const amount = it.reps ? `${it.reps}×` : it.distanceM ? `${it.distanceM} m` : it.durationSec ? `${it.durationSec}s` : '';
 	const w = it.weight !== null ? ` (${formatWeightShort(it.weight)})` : '';
 	return `${withAmount && amount ? amount + ' ' : ''}${name}${w}`;
 }
@@ -53,7 +53,7 @@ function itemText(it: BlockItem, ex: Map<number, Exercise>, withAmount = true): 
 export function describeBlock(b: Block, ex: Map<number, Exercise>): string {
 	switch (b.type) {
 		case 'sets': {
-			const amount = b.item.reps ? `${b.item.reps}` : b.item.durationSec ? `${b.item.durationSec}s` : '?';
+			const amount = b.item.reps ? `${b.item.reps}` : b.item.distanceM ? `${b.item.distanceM} m` : b.item.durationSec ? `${b.item.durationSec}s` : '?';
 			return `${b.sets} × ${amount} ${itemText(b.item, ex, false)}`;
 		}
 		case 'circuit':

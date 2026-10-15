@@ -24,6 +24,8 @@ export interface BlockItem {
 	exerciseId: number;
 	reps?: number | null;
 	durationSec?: number | null;
+	/** Strecke in Metern (z. B. Carries); endet wie Reps per „Fertig“ */
+	distanceM?: number | null;
 	weight: Weight;
 }
 
@@ -105,6 +107,7 @@ export interface LogEntry {
 	weight: Weight;
 	side?: Side;
 	reps: number | null;
+	distanceM?: number | null;
 	/** AMRAP: abgeschlossene Runden */
 	rounds?: number;
 	durationSec: number;

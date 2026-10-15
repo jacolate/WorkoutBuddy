@@ -180,6 +180,18 @@ describe('compile', () => {
 		expect(estimateDuration(steps, 3)).toBe(20 * 3 + 30);
 	});
 
+	it('Strecke (Carry): manuell, je Seite, keine Reps', () => {
+		const steps = compile(
+			structure([{ id: 'c', type: 'sets', sets: 2, restSec: 60, item: { exerciseId: 2, distanceM: 30, weight: 16 } }]),
+			exercises
+		);
+		expect(kinds(steps)).toBe('work,work,rest,work,work');
+		expect(steps[0]).toMatchObject({ advance: 'manual', targetDistanceM: 30, targetReps: null, side: 'L', durationSec: null });
+		expect(plannedVolume(steps)).toEqual({ reps: 0, kg: 0 });
+		// 4 × 30 m à ~1 s + 60 s Pause
+		expect(estimateDuration(steps)).toBe(4 * 30 + 60);
+	});
+
 	it('unbekannte Übung bricht nicht', () => {
 		const steps = compile(structure([{ id: 'a', type: 'sets', sets: 1, restSec: 0, item: { exerciseId: 99, reps: 5, weight: null } }]), exercises);
 		expect(steps[0].exerciseName).toBe('Unbekannte Übung');

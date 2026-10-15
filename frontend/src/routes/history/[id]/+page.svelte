@@ -121,7 +121,7 @@
 								{#if e.skipped}<span class="text-muted"> · übersprungen</span>{/if}
 							</span>
 							<span class="tabular text-muted">{formatWeight(e.weight)}</span>
-							<span class="tabular w-16 text-right font-semibold">{e.reps !== null ? `${e.reps}×` : formatClock(e.durationSec)}</span>
+							<span class="tabular w-16 text-right font-semibold">{e.reps !== null ? `${e.reps}×` : e.distanceM ? `${e.distanceM} m` : formatClock(e.durationSec)}</span>
 						</li>
 					{/each}
 				</ul>

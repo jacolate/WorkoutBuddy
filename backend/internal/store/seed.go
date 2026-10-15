@@ -92,18 +92,63 @@ var seedExercises = []seedExercise{
 		"Hüfte tief halten\nSchultern über den Händen"},
 }
 
-// seed füllt eine frische Datenbank mit Übungen, Beispiel-Workouts und Einstellungen.
+// seedVersion ist die aktuelle Version der mitgelieferten Daten. Jede Stufe läuft genau
+// einmal – auch auf bestehenden Datenbanken, damit neue Übungen/Workouts nach einem
+// Update automatisch auftauchen.
+const seedVersion = 3
+
+// seed bringt die Datenbank auf den aktuellen Seed-Stand.
 func (s *Store) seed(ctx context.Context) error {
-	var n int
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM settings WHERE key = 'seeded'`).Scan(&n); err != nil {
+	current, err := s.currentSeedVersion(ctx)
+	if err != nil {
 		return err
 	}
-	if n > 0 {
-		return nil
+	steps := []func(context.Context) error{s.seedV1, s.seedV2, s.seedV3}
+	for v := current; v < seedVersion; v++ {
+		if err := steps[v](ctx); err != nil {
+			return fmt.Errorf("seed v%d: %w", v+1, err)
+		}
+		if err := s.PutSettings(ctx, map[string]json.RawMessage{"seedVersion": json.RawMessage(fmt.Sprint(v + 1))}); err != nil {
+			return err
+		}
 	}
+	return nil
+}
 
+// currentSeedVersion: 0 = frische DB, 1 = alte DB vor der Versionierung (nur "seeded").
+func (s *Store) currentSeedVersion(ctx context.Context) (int, error) {
+	m, err := s.GetSettings(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if raw, ok := m["seedVersion"]; ok {
+		var v int
+		if err := json.Unmarshal(raw, &v); err != nil {
+			return 0, err
+		}
+		return v, nil
+	}
+	if _, ok := m["seeded"]; ok {
+		return 1, nil
+	}
+	return 0, nil
+}
+
+// ensureExercises legt fehlende Übungen (Abgleich per Name) an und liefert Name → ID
+// für alle Übungen der Datenbank.
+func (s *Store) ensureExercises(ctx context.Context, list []seedExercise) (map[string]int64, error) {
+	existing, err := s.ListExercises(ctx)
+	if err != nil {
+		return nil, err
+	}
 	ids := map[string]int64{}
-	for _, se := range seedExercises {
+	for _, e := range existing {
+		ids[e.Name] = e.ID
+	}
+	for _, se := range list {
+		if _, ok := ids[se.Name]; ok {
+			continue
+		}
 		e := Exercise{
 			Name: se.Name, Description: se.Description, Category: se.Category, Unilateral: se.Unilateral,
 			Cues: se.Cues, CameraHint: se.CameraHint,
@@ -118,12 +163,27 @@ func (s *Store) seed(ctx context.Context) error {
 		}
 		created, err := s.CreateExercise(ctx, e)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		ids[se.Name] = created.ID
 	}
+	return ids, nil
+}
 
-	for _, w := range seedWorkouts(ids) {
+// ensureWorkouts legt Workouts an, die es (per Name) noch nicht gibt.
+func (s *Store) ensureWorkouts(ctx context.Context, list []seedWorkout) error {
+	existing, err := s.ListWorkouts(ctx)
+	if err != nil {
+		return err
+	}
+	names := map[string]bool{}
+	for _, w := range existing {
+		names[w.Name] = true
+	}
+	for _, w := range list {
+		if names[w.name] {
+			continue
+		}
 		raw, err := json.Marshal(w.structure)
 		if err != nil {
 			return err
@@ -132,7 +192,18 @@ func (s *Store) seed(ctx context.Context) error {
 			return err
 		}
 	}
+	return nil
+}
 
+// seedV1: Grundbibliothek, Beispiel-Workouts und Standard-Einstellungen.
+func (s *Store) seedV1(ctx context.Context) error {
+	ids, err := s.ensureExercises(ctx, seedExercises)
+	if err != nil {
+		return err
+	}
+	if err := s.ensureWorkouts(ctx, seedWorkouts(ids)); err != nil {
+		return err
+	}
 	return s.PutSettings(ctx, map[string]json.RawMessage{
 		"seeded":          json.RawMessage(`true`),
 		"weights":         json.RawMessage(`[12, 16]`),

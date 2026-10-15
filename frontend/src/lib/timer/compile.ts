@@ -22,6 +22,7 @@ export interface Step {
 	exerciseId: number | null;
 	exerciseName: string;
 	targetReps: number | null;
+	targetDistanceM: number | null;
 	weight: Weight;
 	side?: Side;
 	amrapItems?: AmrapItem[];
@@ -93,6 +94,7 @@ function timerStep(kind: StepKind, durationSec: number, blockIndex: number, labe
 		exerciseId: null,
 		exerciseName: '',
 		targetReps: null,
+		targetDistanceM: null,
 		weight: null,
 		blockIndex,
 		blockLabel: label,
@@ -107,10 +109,10 @@ function lookup(exercises: ExerciseLookup, id: number): { name: string; unilater
 	return e ? { name: e.name, unilateral: e.unilateral } : { name: 'Unbekannte Übung', unilateral: false };
 }
 
-/** Arbeitsschritt für ein Item; Reps → manuell, sonst Zeit. */
+/** Arbeitsschritt für ein Item; Reps/Strecke → manuell, sonst Zeit. */
 function workStep(item: BlockItem, exercises: ExerciseLookup, bi: number, label: string, progress: string, record: boolean, side?: Side): Draft {
 	const ex = lookup(exercises, item.exerciseId);
-	const timed = !item.reps && !!item.durationSec;
+	const timed = !item.reps && !item.distanceM && !!item.durationSec;
 	return {
 		kind: 'work',
 		advance: timed ? 'timer' : 'manual',
@@ -118,6 +120,7 @@ function workStep(item: BlockItem, exercises: ExerciseLookup, bi: number, label:
 		exerciseId: item.exerciseId,
 		exerciseName: ex.name,
 		targetReps: item.reps ?? null,
+		targetDistanceM: item.reps ? null : (item.distanceM ?? null),
 		weight: item.weight,
 		side,
 		blockIndex: bi,
@@ -184,7 +187,8 @@ function compileBlock(block: Block, bi: number, exercises: ExerciseLookup): Draf
 					out.push({
 						...workStep({ ...item, durationSec: block.workSec }, exercises, bi, label, progress, record, side),
 						advance: 'timer',
-						durationSec: block.workSec
+						durationSec: block.workSec,
+						targetDistanceM: null
 					});
 					if (n < total && block.restSec > 0) {
 						out.push(timerStep('rest', block.restSec, bi, label, progress));
@@ -224,6 +228,7 @@ function compileBlock(block: Block, bi: number, exercises: ExerciseLookup): Draf
 				exerciseId: null,
 				exerciseName: 'AMRAP',
 				targetReps: null,
+				targetDistanceM: null,
 				weight: null,
 				amrapItems: items,
 				blockIndex: bi,
@@ -241,11 +246,12 @@ function compileBlock(block: Block, bi: number, exercises: ExerciseLookup): Draf
 	return out;
 }
 
-/** Geschätzte Gesamtdauer in Sekunden (manuelle Schritte: Reps × secondsPerRep). */
+/** Geschätzte Gesamtdauer in Sekunden (manuelle Schritte: Reps × secondsPerRep, ~1 s pro Meter). */
 export function estimateDuration(steps: Step[], secondsPerRep = 3): number {
 	let total = 0;
 	for (const s of steps) {
 		if (s.advance === 'timer') total += s.durationSec ?? 0;
+		else if (s.targetDistanceM) total += s.targetDistanceM;
 		else total += (s.targetReps ?? 10) * secondsPerRep;
 	}
 	return total;

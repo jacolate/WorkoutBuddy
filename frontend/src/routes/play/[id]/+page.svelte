@@ -112,6 +112,7 @@
 		const w = weightWords(s.weight);
 		if (w) parts.push(w);
 		if (s.targetReps) parts.push(`${s.targetReps} Wiederholungen`);
+		else if (s.targetDistanceM) parts.push(`${s.targetDistanceM} Meter`);
 		else if (s.durationSec && s.kind === 'work') parts.push(`${s.durationSec} Sekunden`);
 		return parts.join(', ');
 	}
@@ -183,7 +184,8 @@
 			});
 		} else {
 			let reps: number | null;
-			if (s.advance === 'manual') reps = repsInput;
+			if (s.targetDistanceM) reps = null;
+			else if (s.advance === 'manual') reps = repsInput;
 			else if (poseReps > 0) reps = poseReps;
 			else reps = s.targetReps;
 			log.push({
@@ -194,6 +196,7 @@
 				weight: s.weight,
 				side: s.side,
 				reps: skipped ? null : reps,
+				distanceM: skipped ? null : s.targetDistanceM,
 				durationSec: Math.round(elapsedSec),
 				skipped,
 				at
@@ -602,7 +605,12 @@
 				{/if}
 			{:else if isWork && step.advance === 'manual'}
 				<div class="mt-4 flex flex-col items-center">
-					{#if poseActive}
+					{#if step.targetDistanceM}
+						<p class="tabular leading-none font-black {cameraOn ? 'text-6xl drop-shadow-lg landscape:text-5xl' : 'text-[min(26vw,14vh,8rem)]'}">
+							{step.targetDistanceM}<span class="text-[0.45em] opacity-60"> m</span>
+						</p>
+						<p class="text-lg font-semibold opacity-70">Strecke{step.side ? ` · ${formatSide(step.side)}` : ''}</p>
+					{:else if poseActive}
 						<p class="tabular leading-none font-black {cameraOn ? 'text-6xl drop-shadow-lg landscape:text-5xl' : 'text-[min(26vw,14vh,8rem)]'}">
 							{poseReps}<span class="text-[0.45em] opacity-60">/{step.targetReps}</span>
 						</p>
@@ -624,7 +632,11 @@
 					<p class="text-xs font-semibold tracking-wide uppercase opacity-60">Als nächstes</p>
 					<p class="text-lg font-bold">{nextWork.amrapItems ? 'AMRAP' : nextWork.exerciseName}</p>
 					<p class="text-sm opacity-70">
-						{[nextWork.targetReps ? `${nextWork.targetReps} Wdh.` : nextWork.durationSec ? `${nextWork.durationSec} s` : '', formatWeight(nextWork.weight), formatSide(nextWork.side)]
+						{[
+							nextWork.targetReps ? `${nextWork.targetReps} Wdh.` : nextWork.targetDistanceM ? `${nextWork.targetDistanceM} m` : nextWork.durationSec ? `${nextWork.durationSec} s` : '',
+							formatWeight(nextWork.weight),
+							formatSide(nextWork.side)
+						]
 							.filter(Boolean)
 							.join(' · ')}
 					</p>
@@ -649,7 +661,7 @@
 
 		<!-- Steuerung -->
 		<footer class="relative z-10 space-y-3 px-4 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
-			{#if isWork && step.advance === 'manual'}
+			{#if isWork && step.advance === 'manual' && !step.targetDistanceM}
 				<div class="mx-auto flex max-w-sm items-center justify-center gap-3">
 					<button class="icon-btn size-14 rounded-full {cameraOn ? 'bg-white/15 text-white' : 'bg-surface shadow-card'}" onclick={() => (repsInput = Math.max(0, repsInput - 1))} aria-label="Weniger">
 						<Minus class="size-6" />

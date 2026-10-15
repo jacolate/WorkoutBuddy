@@ -26,12 +26,12 @@ func TestSeedAndReopen(t *testing.T) {
 	}
 	ctx := context.Background()
 	ex, _ := s.ListExercises(ctx)
-	if len(ex) != len(seedExercises) {
-		t.Fatalf("got %d exercises, want %d", len(ex), len(seedExercises))
+	if want := len(seedExercises) + len(seedExercisesV2) + len(seedExercisesV3); len(ex) != want {
+		t.Fatalf("got %d exercises, want %d", len(ex), want)
 	}
 	wo, _ := s.ListWorkouts(ctx)
-	if len(wo) != 4 {
-		t.Fatalf("got %d workouts, want 4", len(wo))
+	if len(wo) != 6 {
+		t.Fatalf("got %d workouts, want 6", len(wo))
 	}
 	for _, w := range wo {
 		var v map[string]any
@@ -50,6 +50,154 @@ func TestSeedAndReopen(t *testing.T) {
 	ex2, _ := s2.ListExercises(ctx)
 	if len(ex2) != len(ex) {
 		t.Fatalf("reseeded: %d vs %d", len(ex2), len(ex))
+	}
+}
+
+// Eine DB aus der Zeit vor der Seed-Versionierung bekommt beim Update die v2-Daten,
+// ohne dass Übungen doppelt angelegt werden; vom Nutzer gelöschte v1-Workouts bleiben weg.
+func TestSeedUpgradeFromV1(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "test.db")
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	exBefore, _ := s.ListExercises(ctx)
+	// Zustand „altes Image“: nur v1-Seed, kein seedVersion, v2-Workouts fehlen.
+	for _, q := range []string{
+		`DELETE FROM settings WHERE key = 'seedVersion'`,
+		`DELETE FROM workouts WHERE name LIKE 'Workout A%' OR name LIKE 'Workout B%' OR name = 'Tabata Swings'`,
+		`DELETE FROM exercises WHERE name = 'Dead Bug'`,
+	} {
+		if _, err := s.db.ExecContext(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.Close()
+
+	s2, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s2.Close()
+	ex, _ := s2.ListExercises(ctx)
+	if len(ex) != len(exBefore) {
+		t.Fatalf("exercises: got %d, want %d (no duplicates, Dead Bug re-created)", len(ex), len(exBefore))
+	}
+	wo, _ := s2.ListWorkouts(ctx)
+	names := map[string]bool{}
+	for _, w := range wo {
+		names[w.Name] = true
+	}
+	if !names["Workout A – Hüftstreckung & Stabilität"] || !names["Workout B – Einbeinig & Hüfte seitlich"] {
+		t.Fatalf("v2 workouts missing: %v", names)
+	}
+	if names["Tabata Swings"] {
+		t.Fatal("deleted v1 workout must not come back")
+	}
+	m, _ := s2.GetSettings(ctx)
+	if string(m["seedVersion"]) != "3" {
+		t.Fatalf("seedVersion %s", m["seedVersion"])
+	}
+}
+
+// v2→v3: unveränderte A/B-Workouts bekommen Aufwärmen + neue Pausen,
+// im Editor angepasste bleiben unangetastet.
+func TestSeedUpgradeFromV2(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "test.db")
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	ids := map[string]int64{}
+	ex, _ := s.ListExercises(ctx)
+	for _, e := range ex {
+		ids[e.Name] = e.ID
+	}
+	// Datenbank auf v2-Stand zurücksetzen: A/B im v2-Format, B zusätzlich vom Nutzer geändert.
+	for _, w := range seedWorkoutsV2(ids) {
+		raw, _ := json.Marshal(w.structure)
+		notes := w.notes
+		if w.name[len("Workout ")] == 'B' {
+			notes = "meine eigene Notiz"
+		}
+		if _, err := s.db.ExecContext(ctx, `UPDATE workouts SET notes = ?, structure = ? WHERE name = ?`, notes, string(raw), w.name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.PutSettings(ctx, map[string]json.RawMessage{"seedVersion": json.RawMessage("2")}); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+
+	s2, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s2.Close()
+	wo, _ := s2.ListWorkouts(ctx)
+	blocks := func(w Workout) []map[string]any {
+		var st struct {
+			Blocks []map[string]any `json:"blocks"`
+		}
+		json.Unmarshal(w.Structure, &st)
+		return st.Blocks
+	}
+	var a, b *Workout
+	for i := range wo {
+		switch wo[i].Name {
+		case "Workout A – Hüftstreckung & Stabilität":
+			a = &wo[i]
+		case "Workout B – Einbeinig & Hüfte seitlich":
+			b = &wo[i]
+		}
+	}
+	if a == nil || b == nil {
+		t.Fatal("A/B missing")
+	}
+	if bl := blocks(*a); len(bl) != 7 || bl[0]["type"] != "circuit" {
+		t.Fatalf("A not upgraded: %d blocks", len(bl))
+	}
+	if bl := blocks(*b); len(bl) != 7 || b.Notes != "meine eigene Notiz" {
+		t.Fatalf("modified B must stay untouched: %d blocks, notes %q", len(bl), b.Notes)
+	}
+}
+
+// Alle Übungs-IDs in den Seed-Workouts müssen existieren.
+func TestSeedWorkoutsReferenceExistingExercises(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	ex, _ := s.ListExercises(ctx)
+	valid := map[float64]bool{}
+	for _, e := range ex {
+		valid[float64(e.ID)] = true
+	}
+	wo, _ := s.ListWorkouts(ctx)
+	for _, w := range wo {
+		var st struct {
+			Blocks []struct {
+				Item *struct {
+					ExerciseID float64 `json:"exerciseId"`
+				} `json:"item"`
+				Items []struct {
+					ExerciseID float64 `json:"exerciseId"`
+				} `json:"items"`
+			} `json:"blocks"`
+		}
+		if err := json.Unmarshal(w.Structure, &st); err != nil {
+			t.Fatal(err)
+		}
+		for _, b := range st.Blocks {
+			if b.Item != nil && !valid[b.Item.ExerciseID] {
+				t.Errorf("%s: unknown exercise %v", w.Name, b.Item.ExerciseID)
+			}
+			for _, it := range b.Items {
+				if !valid[it.ExerciseID] {
+					t.Errorf("%s: unknown exercise %v", w.Name, it.ExerciseID)
+				}
+			}
+		}
 	}
 }
 

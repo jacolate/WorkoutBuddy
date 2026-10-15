@@ -34,6 +34,8 @@ export function formatDuration(totalSec: number): string {
 	const m = Math.floor((s % 3600) / 60);
 	const sec = s % 60;
 	if (h > 0) return `${h} h ${m} min`;
+	// Ab 10 Minuten sind Sekunden nur Scheingenauigkeit.
+	if (s >= 600) return `${Math.round(s / 60)} min`;
 	return sec ? `${m} min ${sec} s` : `${m} min`;
 }
 

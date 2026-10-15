@@ -27,22 +27,27 @@
 
 	let picking = $state(false);
 	const exercise = $derived(app.exerciseMap.get(item.exerciseId));
-	const timed = $derived(amount === 'repsOrTime' && !item.reps && !!item.durationSec);
+	type Mode = 'reps' | 'time' | 'distance';
+	const mode = $derived<Mode>(
+		amount !== 'repsOrTime' || item.reps ? 'reps' : item.distanceM ? 'distance' : item.durationSec ? 'time' : 'reps'
+	);
+	const MODES: { id: Mode; label: string }[] = [
+		{ id: 'reps', label: 'Wdh.' },
+		{ id: 'time', label: 'Zeit' },
+		{ id: 'distance', label: 'Strecke' }
+	];
 
-	function setMode(mode: 'reps' | 'time') {
-		if (mode === 'reps') {
-			item.reps = item.reps || 10;
-			item.durationSec = null;
-		} else {
-			item.durationSec = item.durationSec || 30;
-			item.reps = null;
-		}
+	function setMode(m: Mode) {
+		item.reps = m === 'reps' ? item.reps || 10 : null;
+		item.durationSec = m === 'time' ? item.durationSec || 30 : null;
+		item.distanceM = m === 'distance' ? item.distanceM || 30 : null;
 	}
 
 	const summary = $derived.by(() => {
 		const parts: string[] = [];
 		if (amount !== 'none') {
 			if (item.reps) parts.push(`${item.reps} Wdh.`);
+			else if (item.distanceM) parts.push(`${item.distanceM} m`);
 			else if (item.durationSec) parts.push(`${item.durationSec} s`);
 		}
 		if (item.weight !== null) parts.push(item.weight === 'bw' ? 'Körpergewicht' : `${formatWeightShort(item.weight)} kg`);
@@ -75,16 +80,21 @@
 			</button>
 
 			{#if amount === 'repsOrTime'}
-				<div class="grid grid-cols-2 gap-1 rounded-xl bg-surface-2 p-1">
-					<button type="button" class="h-10 rounded-lg text-sm font-semibold {!timed ? 'bg-surface shadow-card' : 'text-muted'}" onclick={() => setMode('reps')}>Wiederholungen</button>
-					<button type="button" class="h-10 rounded-lg text-sm font-semibold {timed ? 'bg-surface shadow-card' : 'text-muted'}" onclick={() => setMode('time')}>Zeit</button>
+				<div class="grid grid-cols-3 gap-1 rounded-xl bg-surface-2 p-1">
+					{#each MODES as m (m.id)}
+						<button type="button" class="h-10 rounded-lg text-sm font-semibold {mode === m.id ? 'bg-surface shadow-card' : 'text-muted'}" onclick={() => setMode(m.id)}>
+							{m.label}
+						</button>
+					{/each}
 				</div>
 			{/if}
 
-			{#if amount === 'reps' || (amount === 'repsOrTime' && !timed)}
+			{#if amount !== 'none' && mode === 'reps'}
 				<Stepper label={exercise?.unilateral ? 'Wiederholungen (je Seite)' : 'Wiederholungen'} bind:value={() => item.reps ?? 10, (v) => (item.reps = v)} min={1} max={200} />
-			{:else if amount === 'repsOrTime' && timed}
+			{:else if mode === 'time'}
 				<Stepper label={exercise?.unilateral ? 'Dauer (je Seite)' : 'Dauer'} bind:value={() => item.durationSec ?? 30, (v) => (item.durationSec = v)} min={5} max={3600} step={5} time />
+			{:else if mode === 'distance'}
+				<Stepper label={exercise?.unilateral ? 'Strecke (je Seite)' : 'Strecke'} bind:value={() => item.distanceM ?? 30, (v) => (item.distanceM = v)} min={5} max={1000} step={5} unit="m" />
 			{/if}
 
 			<WeightPicker bind:value={item.weight} />
