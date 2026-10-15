@@ -1,0 +1,122 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+:root,
+[data-theme='light'] {
+	color-scheme: light;
+	--bg: #f6f6f4;
+	--surface: #ffffff;
+	--surface-2: #eeeeeb;
+	--line: #e0e0dc;
+	--fg: #18181b;
+	--muted: #6b6b73;
+	--accent: #ea580c;
+	--accent-soft: #ea580c1a;
+	--accent-fg: #ffffff;
+	--rest: #2563eb;
+	--rest-soft: #2563eb1a;
+	--ok: #16a34a;
+	--ok-soft: #16a34a1a;
+	--warn: #ca8a04;
+	--warn-soft: #ca8a041f;
+	--danger: #dc2626;
+	--danger-soft: #dc26261a;
+	--shadow: 0 1px 2px rgb(0 0 0 / 0.05), 0 1px 3px rgb(0 0 0 / 0.06);
+}
+
+[data-theme='dark'] {
+	color-scheme: dark;
+	--bg: #0c0c0e;
+	--surface: #16161a;
+	--surface-2: #212127;
+	--line: #2b2b33;
+	--fg: #f4f4f5;
+	--muted: #9d9da8;
+	--accent: #fb7b30;
+	--accent-soft: #fb7b3024;
+	--accent-fg: #160a03;
+	--rest: #60a5fa;
+	--rest-soft: #60a5fa24;
+	--ok: #34d399;
+	--ok-soft: #34d39924;
+	--warn: #facc15;
+	--warn-soft: #facc1524;
+	--danger: #f87171;
+	--danger-soft: #f8717124;
+	--shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+}
+
+@theme inline {
+	--color-bg: var(--bg);
+	--color-surface: var(--surface);
+	--color-surface-2: var(--surface-2);
+	--color-line: var(--line);
+	--color-fg: var(--fg);
+	--color-muted: var(--muted);
+	--color-accent: var(--accent);
+	--color-accent-soft: var(--accent-soft);
+	--color-accent-fg: var(--accent-fg);
+	--color-rest: var(--rest);
+	--color-rest-soft: var(--rest-soft);
+	--color-ok: var(--ok);
+	--color-ok-soft: var(--ok-soft);
+	--color-warn: var(--warn);
+	--color-warn-soft: var(--warn-soft);
+	--color-danger: var(--danger);
+	--color-danger-soft: var(--danger-soft);
+	--shadow-card: var(--shadow);
+	--font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+html,
+body {
+	background: var(--bg);
+	color: var(--fg);
+	-webkit-tap-highlight-color: transparent;
+	overscroll-behavior-y: none;
+}
+
+body {
+	min-height: 100dvh;
+	font-family: var(--font-sans);
+	-webkit-font-smoothing: antialiased;
+}
+
+/* Eigene Utilities (in Tailwind v4 per @utility, damit sie kombinierbar sind) */
+@utility card {
+	@apply rounded-2xl border border-line bg-surface shadow-card;
+}
+@utility btn {
+	@apply inline-flex min-h-12 items-center justify-center gap-2 rounded-xl px-4 text-base font-semibold transition select-none active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50;
+}
+@utility btn-primary {
+	@apply btn bg-accent text-accent-fg hover:brightness-110;
+}
+@utility btn-secondary {
+	@apply btn border border-line bg-surface text-fg hover:bg-surface-2;
+}
+@utility btn-ghost {
+	@apply btn text-fg hover:bg-surface-2;
+}
+@utility btn-danger {
+	@apply btn bg-danger-soft text-danger hover:brightness-110;
+}
+@utility icon-btn {
+	@apply inline-flex size-12 items-center justify-center rounded-xl text-fg transition select-none hover:bg-surface-2 active:scale-95 disabled:opacity-40;
+}
+@utility input {
+	@apply min-h-12 w-full rounded-xl border border-line bg-surface px-3 text-base text-fg outline-none placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent-soft;
+}
+@utility label {
+	@apply mb-1.5 block text-sm font-medium text-muted;
+}
+@utility chip {
+	@apply inline-flex min-h-10 items-center justify-center rounded-full border border-line bg-surface px-3.5 text-sm font-semibold text-fg transition select-none active:scale-95;
+}
+@utility chip-active {
+	@apply border-accent bg-accent text-accent-fg;
+}
+@utility tabular {
+	font-variant-numeric: tabular-nums;
+}

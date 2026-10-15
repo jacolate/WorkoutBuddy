@@ -1,0 +1,17 @@
+{
+	"name": "Workout",
+	"short_name": "Workout",
+	"description": "Kettlebell-Workouts mit Timer und Kamera-Spiegel",
+	"start_url": "/",
+	"scope": "/",
+	"display": "standalone",
+	"orientation": "any",
+	"background_color": "#0c0c0e",
+	"theme_color": "#ea580c",
+	"lang": "de",
+	"icons": [
+		{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+		{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+		{ "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+	]
+}

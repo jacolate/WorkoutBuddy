@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#ea580c"/>
+  <g fill="none" stroke="#fff" stroke-width="34" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M186 214c-8-22-12-40-12-56 0-46 37-74 82-74s82 28 82 74c0 16-4 34-12 56"/>
+  </g>
+  <path fill="#fff" d="M256 196c-80 0-136 56-136 126 0 44 22 80 52 102 10 8 22 10 34 10h100c12 0 24-2 34-10 30-22 52-58 52-102 0-70-56-126-136-126z"/>
+  <text x="256" y="378" text-anchor="middle" font-family="Helvetica, Arial, sans-serif" font-weight="800" font-size="120" fill="#ea580c">KB</text>
+</svg>
