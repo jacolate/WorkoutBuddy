@@ -1,7 +1,6 @@
 **/node_modules
 **/.svelte-kit
-backend/web/dist/*
-!backend/web/dist/.gitkeep
+backend/web/dist
 data
 .env
 .git

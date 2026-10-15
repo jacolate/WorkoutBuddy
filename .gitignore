@@ -1,5 +1,4 @@
 .env
 data/
 bin/
-backend/web/dist/*
-!backend/web/dist/.gitkeep
+backend/web/dist/

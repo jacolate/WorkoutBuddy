@@ -6,12 +6,16 @@ import (
 	"io/fs"
 )
 
-//go:embed all:dist
-var dist embed.FS
+// "all:*" statt "all:dist": Das Muster trifft immer mindestens diese Datei, daher
+// kompiliert das Paket auch ohne Frontend-Build (z. B. Go-Tests in CI). Ein Platzhalter
+// in dist/ funktioniert nicht, weil adapter-static den Ordner bei jedem Build leert.
+//
+//go:embed all:*
+var files embed.FS
 
-// Dist liefert den Inhalt von dist/ als Dateisystem.
+// Dist liefert den Inhalt von dist/ als Dateisystem (leer, wenn nicht gebaut).
 func Dist() fs.FS {
-	sub, err := fs.Sub(dist, "dist")
+	sub, err := fs.Sub(files, "dist")
 	if err != nil {
 		panic(err)
 	}
