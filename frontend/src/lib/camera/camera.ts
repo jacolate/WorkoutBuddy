@@ -14,7 +14,7 @@ export class CameraError extends Error {
 export async function openCamera(facing: Facing): Promise<MediaStream> {
 	if (!window.isSecureContext) {
 		throw new CameraError(
-			'Die Kamera funktioniert nur über HTTPS (oder localhost). Starte den Server mit TLS_MODE=self-signed oder hinter einem HTTPS-Proxy.',
+			'Die Kamera funktioniert nur über HTTPS (oder localhost). Öffne die App über die HTTPS-Adresse deines Reverse-Proxys (z. B. Caddy).',
 			'insecure'
 		);
 	}

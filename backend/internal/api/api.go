@@ -39,7 +39,7 @@ func New(o Options) http.Handler {
 	s := &Server{store: o.Store, media: o.Media, auth: o.Auth, maxUploadBytes: o.MaxUploadBytes}
 
 	r := chi.NewRouter()
-	// Kein middleware.RealIP: X-Forwarded-For wird nur bei TRUST_PROXY ausgewertet (auth.ClientIP),
+	// Kein middleware.RealIP: X-Forwarded-For wird nur von TRUSTED_PROXIES ausgewertet (auth.ClientIP),
 	// sonst könnte man das Login-Rate-Limit mit gefälschten Headern umgehen.
 	r.Use(middleware.Recoverer)
 	r.Use(securityHeaders)

@@ -1,24 +1,14 @@
 services:
-  workout:
-    # Fertiges Image aus GitHub Actions. Update: docker compose pull && docker compose up -d
+  workoutbuddy:
     image: ghcr.io/jacolate/workoutbuddy:latest
-    # Alternativ lokal bauen: obige Zeile auskommentieren und stattdessen
-    # build: .
-    container_name: workout-app
+    container_name: workoutbuddy
     restart: unless-stopped
-    ports:
-      # Aufruf im Browser: https://<server-ip>:8443
-      - "8443:8080"
     env_file: .env
-    environment:
-      # Kamera, Wake-Lock & Co. funktionieren im Browser nur über HTTPS.
-      # self-signed: Zertifikat wird einmalig erzeugt (liegt im Volume), im Handy-Browser einmal akzeptieren.
-      # off: nur HTTP – sinnvoll, wenn ein HTTPS-Reverse-Proxy davor sitzt (dann TRUST_PROXY=true setzen).
-      TLS_MODE: ${TLS_MODE:-self-signed}
-      SESSION_DAYS: 30
-      MAX_UPLOAD_MB: 500
+    ports:
+      # Caddy (separate host/LXC) proxies to http://<docker-host-ip>:8080
+      - "${WORKOUT_PORT:-8080}:8080"
     volumes:
-      - workout-data:/data
+      - workoutbuddy-data:/data
 
 volumes:
-  workout-data:
+  workoutbuddy-data:

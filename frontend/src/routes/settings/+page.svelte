@@ -39,7 +39,7 @@
 	}
 
 	const checks = [
-		{ label: 'Sichere Verbindung (HTTPS)', ok: window.isSecureContext, hint: 'Nötig für Kamera und Bildschirm-an. Server mit TLS_MODE=self-signed starten.' },
+		{ label: 'Sichere Verbindung (HTTPS)', ok: window.isSecureContext, hint: 'Nötig für Kamera und Bildschirm-an. App über die HTTPS-Adresse des Reverse-Proxys öffnen.' },
 		{ label: 'Kamera-API', ok: !!navigator.mediaDevices?.getUserMedia, hint: 'Nur über HTTPS verfügbar.' },
 		{ label: 'Videoaufnahme', ok: canRecord(), hint: 'Browser unterstützt MediaRecorder nicht.' },
 		{ label: 'Bildschirm bleibt an', ok: wakeLockSupported(), hint: 'Wake-Lock nicht verfügbar – ggf. Auto-Sperre manuell verlängern.' },

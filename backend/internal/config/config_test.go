@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"net/netip"
+	"testing"
+)
 
 func TestLoadRequiresCredentials(t *testing.T) {
 	t.Setenv("AUTH_USER", "")
@@ -11,11 +14,10 @@ func TestLoadRequiresCredentials(t *testing.T) {
 	}
 }
 
-func TestLoadUnescapesComposeDollar(t *testing.T) {
+func TestLoadUnescapesComposeDollarAndParsesProxies(t *testing.T) {
 	t.Setenv("AUTH_USER", "jakob")
 	t.Setenv("AUTH_PASSWORD_HASH", "$$2a$$10$$abc")
-	t.Setenv("TLS_MODE", "self-signed")
-	t.Setenv("TLS_HOSTS", "192.168.1.10, workout.lan")
+	t.Setenv("TRUSTED_PROXIES", "192.168.178.20, 10.0.0.0/8")
 	c, err := Load()
 	if err != nil {
 		t.Fatal(err)
@@ -23,15 +25,18 @@ func TestLoadUnescapesComposeDollar(t *testing.T) {
 	if c.AuthPasswordHash != "$2a$10$abc" {
 		t.Fatalf("hash %q", c.AuthPasswordHash)
 	}
-	if c.TLSMode != TLSSelfSigned || len(c.TLSHosts) != 2 || c.TLSHosts[1] != "workout.lan" {
-		t.Fatalf("tls config %+v", c)
+	if len(c.TrustedProxies) != 2 ||
+		!c.TrustedProxies[0].Contains(netip.MustParseAddr("192.168.178.20")) ||
+		c.TrustedProxies[0].Contains(netip.MustParseAddr("192.168.178.21")) ||
+		!c.TrustedProxies[1].Contains(netip.MustParseAddr("10.1.2.3")) {
+		t.Fatalf("proxies %v", c.TrustedProxies)
 	}
 }
 
-func TestLoadRejectsBadTLSMode(t *testing.T) {
+func TestLoadRejectsBadProxy(t *testing.T) {
 	t.Setenv("AUTH_USER", "jakob")
 	t.Setenv("AUTH_PASSWORD", "secretsecret")
-	t.Setenv("TLS_MODE", "maybe")
+	t.Setenv("TRUSTED_PROXIES", "caddy.lan")
 	if _, err := Load(); err == nil {
 		t.Fatal("expected error")
 	}

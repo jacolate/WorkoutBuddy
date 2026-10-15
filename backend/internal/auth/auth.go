@@ -11,6 +11,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 	"sync"
 	"time"
@@ -33,7 +34,7 @@ type Service struct {
 	user         string
 	passwordHash []byte
 	sessionTTL   time.Duration
-	trustProxy   bool
+	proxies      []netip.Prefix
 	limiter      *limiter
 	now          func() time.Time
 }
@@ -42,7 +43,8 @@ type Options struct {
 	User         string
 	PasswordHash string
 	SessionTTL   time.Duration
-	TrustProxy   bool
+	// TrustedProxies: nur von diesen Adressen werden X-Forwarded-* ausgewertet.
+	TrustedProxies []netip.Prefix
 	// MaxFailures pro Window und IP, danach 429.
 	MaxFailures int
 	Window      time.Duration
@@ -69,7 +71,7 @@ func New(st *store.Store, o Options) (*Service, error) {
 		user:         o.User,
 		passwordHash: []byte(o.PasswordHash),
 		sessionTTL:   o.SessionTTL,
-		trustProxy:   o.TrustProxy,
+		proxies:      o.TrustedProxies,
 		limiter:      newLimiter(o.MaxFailures, o.Window),
 		now:          time.Now,
 	}, nil
@@ -139,15 +141,43 @@ func (s *Service) Validate(ctx context.Context, token string) (renewed time.Time
 
 func (s *Service) User() string { return s.user }
 
-// ClientIP liefert die IP des Clients (X-Forwarded-For nur, wenn dem Proxy vertraut wird).
+func remoteAddr(r *http.Request) (netip.Addr, bool) {
+	ap, err := netip.ParseAddrPort(r.RemoteAddr)
+	if err != nil {
+		return netip.Addr{}, false
+	}
+	return ap.Addr().Unmap(), true
+}
+
+// fromTrustedProxy prüft, ob die Anfrage direkt von einem vertrauenswürdigen Proxy kommt.
+func (s *Service) fromTrustedProxy(r *http.Request) bool {
+	a, ok := remoteAddr(r)
+	if !ok {
+		return false
+	}
+	for _, p := range s.proxies {
+		if p.Contains(a) {
+			return true
+		}
+	}
+	return false
+}
+
+// ClientIP liefert die IP des Clients. X-Forwarded-For wird nur ausgewertet, wenn die
+// Anfrage von einem vertrauenswürdigen Proxy kommt – sonst könnte jeder im Netz durch
+// einen gefälschten Header das Login-Rate-Limit umgehen.
 func (s *Service) ClientIP(r *http.Request) string {
-	if s.trustProxy {
+	if s.fromTrustedProxy(r) {
 		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-			return strings.TrimSpace(strings.Split(xff, ",")[0])
+			parts := strings.Split(xff, ",")
+			// Der letzte Eintrag wurde vom (vertrauenswürdigen) Proxy selbst gesetzt.
+			if ip := strings.TrimSpace(parts[len(parts)-1]); ip != "" {
+				return ip
+			}
 		}
-		if xr := r.Header.Get("X-Real-IP"); xr != "" {
-			return strings.TrimSpace(xr)
-		}
+	}
+	if a, ok := remoteAddr(r); ok {
+		return a.String()
 	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
@@ -156,12 +186,12 @@ func (s *Service) ClientIP(r *http.Request) string {
 	return host
 }
 
-// IsSecure gibt an, ob die Anfrage über HTTPS kam (für das Secure-Cookie-Flag).
+// IsSecure gibt an, ob der Browser per HTTPS verbunden ist (für das Secure-Cookie-Flag).
 func (s *Service) IsSecure(r *http.Request) bool {
 	if r.TLS != nil {
 		return true
 	}
-	return s.trustProxy && strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+	return s.fromTrustedProxy(r) && strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 }
 
 // SetCookie setzt das Session-Cookie.

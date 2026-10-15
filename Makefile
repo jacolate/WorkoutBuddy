@@ -1,7 +1,7 @@
-.PHONY: dev backend-dev frontend-dev test build docker hash-password
+.PHONY: dev backend-dev frontend-dev test build image hash-password
 
-# Lokale Entwicklung: Go-API auf :8080, Vite mit Hot-Reload auf :5173 (proxy /api → :8080)
-# Login: dev / devpassword – im Browser http://localhost:5173 öffnen (localhost erlaubt Kamera auch ohne HTTPS)
+# Local development: Go API on :8080, Vite with hot reload on :5173 (proxies /api → :8080).
+# Open http://localhost:5173 and log in with dev / devpassword (localhost allows the camera without HTTPS).
 dev:
 	$(MAKE) -j2 backend-dev frontend-dev
 
@@ -15,13 +15,14 @@ test:
 	cd backend && go vet ./... && go test ./...
 	cd frontend && npm test && npm run check
 
-# Einzelnes Binary mit eingebettetem Frontend → bin/workout-app
+# Single binary with the embedded frontend → bin/workout-app
 build:
 	cd frontend && npm ci && npm run build
 	cd backend && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o ../bin/workout-app ./cmd/server
 
-docker:
-	docker compose build
+# Build the container image locally (CI publishes ghcr.io/jacolate/workoutbuddy)
+image:
+	docker build -t workoutbuddy:local .
 
 hash-password:
 	cd backend && go run ./cmd/server hash-password

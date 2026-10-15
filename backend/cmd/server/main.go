@@ -9,7 +9,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -28,7 +27,6 @@ import (
 	"workoutapp/internal/config"
 	"workoutapp/internal/media"
 	"workoutapp/internal/store"
-	"workoutapp/internal/tlsutil"
 	"workoutapp/web"
 )
 
@@ -82,10 +80,10 @@ func run() error {
 		return err
 	}
 	authSvc, err := auth.New(st, auth.Options{
-		User:         cfg.AuthUser,
-		PasswordHash: cfg.AuthPasswordHash,
-		SessionTTL:   cfg.SessionTTL,
-		TrustProxy:   cfg.TrustProxy,
+		User:           cfg.AuthUser,
+		PasswordHash:   cfg.AuthPasswordHash,
+		SessionTTL:     cfg.SessionTTL,
+		TrustedProxies: cfg.TrustedProxies,
 	})
 	if err != nil {
 		return err
@@ -112,23 +110,9 @@ func run() error {
 
 	errc := make(chan error, 1)
 	go func() {
-		switch cfg.TLSMode {
-		case config.TLSSelfSigned:
-			cert, err := tlsutil.LoadOrCreate(filepath.Join(cfg.DataDir, "tls"), cfg.TLSHosts)
-			if err != nil {
-				errc <- err
-				return
-			}
-			srv.TLSConfig = &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12}
-			slog.Info("listening (HTTPS, self-signed)", "addr", cfg.Addr)
-			errc <- srv.ListenAndServeTLS("", "")
-		case config.TLSFiles:
-			slog.Info("listening (HTTPS)", "addr", cfg.Addr)
-			errc <- srv.ListenAndServeTLS(cfg.TLSCert, cfg.TLSKey)
-		default:
-			slog.Info("listening (HTTP)", "addr", cfg.Addr)
-			errc <- srv.ListenAndServe()
-		}
+		// HTTPS übernimmt der Reverse-Proxy (z. B. Caddy).
+		slog.Info("listening", "addr", cfg.Addr, "trusted_proxies", len(cfg.TrustedProxies))
+		errc <- srv.ListenAndServe()
 	}()
 
 	select {
@@ -196,16 +180,8 @@ func healthcheck() int {
 	if strings.HasPrefix(addr, ":") {
 		addr = "127.0.0.1" + addr
 	}
-	scheme := "http"
-	mode := os.Getenv("TLS_MODE")
-	if mode == "self-signed" || mode == "files" || os.Getenv("TLS_CERT") != "" {
-		scheme = "https"
-	}
-	client := &http.Client{
-		Timeout:   3 * time.Second,
-		Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
-	}
-	resp, err := client.Get(scheme + "://" + addr + "/api/health")
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Get("http://" + addr + "/api/health")
 	if err != nil {
 		return 1
 	}

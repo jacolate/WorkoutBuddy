@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"net/netip"
 	"net/textproto"
 	"net/url"
 	"path/filepath"
@@ -33,7 +34,7 @@ type env struct {
 	dbPath string
 }
 
-func newEnv(t *testing.T) *env {
+func newEnv(t *testing.T, proxies ...netip.Prefix) *env {
 	t.Helper()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "test.db")
@@ -47,7 +48,7 @@ func newEnv(t *testing.T) *env {
 		t.Fatal(err)
 	}
 	hash, _ := bcrypt.GenerateFromPassword([]byte(testPassword), bcrypt.MinCost)
-	a, err := auth.New(st, auth.Options{User: "jakob", PasswordHash: string(hash)})
+	a, err := auth.New(st, auth.Options{User: "jakob", PasswordHash: string(hash), TrustedProxies: proxies})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +171,7 @@ func TestLoginRateLimit(t *testing.T) {
 	if resp.StatusCode != http.StatusTooManyRequests {
 		t.Fatalf("expected 429 even with correct password, got %d", resp.StatusCode)
 	}
-	// Gefälschter X-Forwarded-For darf das Limit nicht umgehen (TRUST_PROXY ist aus).
+	// Gefälschter X-Forwarded-For darf das Limit nicht umgehen (keine TRUSTED_PROXIES gesetzt).
 	req, _ := http.NewRequest("POST", e.srv.URL+"/api/auth/login", strings.NewReader(`{"username":"jakob","password":"correct horse"}`))
 	req.Header.Set("X-Forwarded-For", "10.9.8.7")
 	r2, err := c.Do(req)
@@ -180,6 +181,61 @@ func TestLoginRateLimit(t *testing.T) {
 	r2.Body.Close()
 	if r2.StatusCode != http.StatusTooManyRequests {
 		t.Fatalf("XFF bypassed rate limit: %d", r2.StatusCode)
+	}
+}
+
+func TestTrustedProxyHeaders(t *testing.T) {
+	// httptest-Clients kommen von 127.0.0.1 → als Caddy-Proxy eintragen.
+	e := newEnv(t, netip.MustParsePrefix("127.0.0.1/32"))
+	c := e.client()
+	login := func(clientIP, password string) *http.Response {
+		req, _ := http.NewRequest("POST", e.srv.URL+"/api/auth/login",
+			strings.NewReader(`{"username":"jakob","password":"`+password+`"}`))
+		req.Header.Set("X-Forwarded-For", clientIP)
+		req.Header.Set("X-Forwarded-Proto", "https")
+		resp, err := c.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp
+	}
+	// Rate-Limit gilt pro echter Client-IP (aus X-Forwarded-For), nicht pro Proxy-IP.
+	for i := 0; i < 5; i++ {
+		login("192.168.178.50", "nope")
+	}
+	if r := login("192.168.178.50", testPassword); r.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("limited client: %d", r.StatusCode)
+	}
+	r := login("192.168.178.51", testPassword)
+	if r.StatusCode != http.StatusOK {
+		t.Fatalf("other client: %d", r.StatusCode)
+	}
+	var secure bool
+	for _, ck := range r.Cookies() {
+		if ck.Name == auth.CookieName {
+			secure = ck.Secure
+		}
+	}
+	if !secure {
+		t.Fatal("cookie should be Secure behind HTTPS proxy")
+	}
+}
+
+func TestUntrustedProxyHeadersIgnored(t *testing.T) {
+	e := newEnv(t, netip.MustParsePrefix("192.168.178.20/32"))
+	req, _ := http.NewRequest("POST", e.srv.URL+"/api/auth/login",
+		strings.NewReader(`{"username":"jakob","password":"correct horse"}`))
+	req.Header.Set("X-Forwarded-Proto", "https")
+	resp, err := e.client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	for _, ck := range resp.Cookies() {
+		if ck.Name == auth.CookieName && ck.Secure {
+			t.Fatal("X-Forwarded-Proto from untrusted client must be ignored")
+		}
 	}
 }
 
